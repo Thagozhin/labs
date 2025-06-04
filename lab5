@@ -1,0 +1,89 @@
+import itertools
+import random
+import timeit
+
+animals = ["Лев", "Тигр", "Медведь", "Жираф", "Слон", "Зебра"]
+
+def algorithmic_permutations(lst):
+    result = []
+    def permute(current, remaining):
+        if not remaining:
+            result.append(tuple(current))
+        else:
+            for i in range(len(remaining)):
+                permute(current + [remaining[i]], remaining[:i] + remaining[i+1:])
+    permute([], lst)
+    return result
+
+def python_permutations(lst):
+    return list(itertools.permutations(lst))
+
+def part_5_1():
+    print("=== Часть 5.1 ===")
+    alg_time = timeit.timeit("algorithmic_permutations(animals)", globals=globals(), number=1)
+    alg_perms = algorithmic_permutations(animals)
+    py_time = timeit.timeit("python_permutations(animals)", globals=globals(), number=1)
+    py_perms = python_permutations(animals)
+    print("\nПервые 10 вариантов (алгоритмический метод):")
+    for p in alg_perms[:10]:
+        print(p)
+    print(f"Всего вариантов (алгоритмический): {len(alg_perms)}")
+    print("\nПервые 10 вариантов (Python itertools):")
+    for p in py_perms[:10]:
+        print(p)
+    print(f"Всего вариантов (itertools): {len(py_perms)}")
+    print(f"\nВремя алгоритмического метода: {alg_time:.6f} сек")
+    print(f"Время метода itertools: {py_time:.6f} сек")
+
+def generate_friendship_matrix(names, min_val=-5, max_val=10):
+    matrix = {}
+    for a in names:
+        matrix[a] = {}
+        for b in names:
+            if a == b:
+                matrix[a][b] = 0
+            else:
+                matrix[a][b] = random.randint(min_val, max_val)
+    return matrix
+
+def friendship_score(arrangement, matrix):
+    return sum(matrix[arrangement[i]][arrangement[i + 1]] for i in range(len(arrangement) - 1))
+
+def print_friendship_matrix(matrix):
+    print("\nМатрица дружбы:")
+    header = ["{:>8}".format(a) for a in animals]
+    print("{:>8}".format("") + "".join(header))
+    for a in animals:
+        row = ["{:>8}".format(matrix[a][b]) for b in animals]
+        print("{:>8}".format(a) + "".join(row))
+
+def part_5_2():
+    print("\n=== Часть 5.2 ===")
+    threshold = -3
+    matrix = generate_friendship_matrix(animals)
+    print_friendship_matrix(matrix)
+    valid_arrangements = []
+    for perm in itertools.permutations(animals):
+        conflict = False
+        for i in range(len(perm) - 1):
+            if matrix[perm[i]][perm[i + 1]] < threshold:
+                conflict = True
+                break
+        if not conflict:
+            score = friendship_score(perm, matrix)
+            valid_arrangements.append((perm, score))
+    valid_arrangements.sort(key=lambda x: x[1], reverse=True)
+    print("\nДопустимых вариантов:", len(valid_arrangements))
+    print("Топ-10 лучших расстановок по сумме дружбы:")
+    for i, (perm, score) in enumerate(valid_arrangements[:10], start=1):
+        print(f"{i}. {perm} — Сумма дружбы: {score}")
+    if valid_arrangements:
+        top_perm, top_score = valid_arrangements[0]
+        print("\n=== ТОП-1 РАССТАНОВКА ===")
+        print(f"{top_perm} — Сумма дружбы: {top_score}")
+    else:
+        print("\nНет подходящих расстановок")
+
+if __name__ == "__main__":
+    part_5_1()
+    part_5_2()
