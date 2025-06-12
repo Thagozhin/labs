@@ -1,0 +1,106 @@
+import itertools
+import random
+import tkinter as tk
+from tkinter import scrolledtext, messagebox
+
+class AnimalFriendship:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Анализ дружеских связей животных")
+        self.animals = ["Лев", "Тигр", "Медведь", "Жираф", "Слон", "Зебра"]
+        self.threshold = tk.IntVar(value=-3)
+        self.matrix = self.generate_friendship_matrix(self.animals)
+        self.create_widgets()
+    
+    def create_widgets(self):
+        main_frame = tk.Frame(self.root, padx=10, pady=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        control_frame = tk.Frame(main_frame)
+        control_frame.pack(fill=tk.X, pady=5)
+        
+        tk.Button(control_frame, text="Сгенерировать новую матрицу", 
+                 command=self.generate_new_matrix).pack(side=tk.LEFT, padx=5)    
+        tk.Label(control_frame, text="Порог дружбы:").pack(side=tk.LEFT, padx=5)
+        tk.Entry(control_frame, textvariable=self.threshold, width=5).pack(side=tk.LEFT, padx=5)        
+        tk.Button(control_frame, text="Анализировать расстановки", 
+                 command=self.analyze_arrangements).pack(side=tk.LEFT, padx=5)
+        
+        matrix_frame = tk.LabelFrame(main_frame, text="Матрица дружбы", padx=5, pady=5)
+        matrix_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        self.matrix_text = scrolledtext.ScrolledText(matrix_frame, width=60, height=10)
+        self.matrix_text.pack(fill=tk.BOTH, expand=True)
+        self.matrix_text.insert(tk.END, self.format_matrix(self.matrix))
+        self.matrix_text.config(state=tk.DISABLED)
+        
+        result_frame = tk.LabelFrame(main_frame, text="Результаты анализа", padx=5, pady=5)
+        result_frame.pack(fill=tk.BOTH, expand=True)        
+        self.result_text = scrolledtext.ScrolledText(result_frame, width=80, height=20)
+        self.result_text.pack(fill=tk.BOTH, expand=True)
+    
+    def generate_friendship_matrix(self, names, min_val=-5, max_val=10):
+        matrix = {}
+        for a in names:
+            matrix[a] = {}
+            for b in names:
+                if a == b:
+                    matrix[a][b] = 0
+                else:
+                    matrix[a][b] = random.randint(min_val, max_val)
+        return matrix
+    
+    def format_matrix(self, matrix):
+        header = ["{:>8}".format(a) for a in self.animals]
+        text = "{:>8}".format("") + "".join(header) + "\n"
+        for a in self.animals:
+            row = ["{:>8}".format(matrix[a][b]) for b in self.animals]
+            text += "{:>8}".format(a) + "".join(row) + "\n"
+        return text
+    
+    def generate_new_matrix(self):
+        self.matrix = self.generate_friendship_matrix(self.animals)
+        self.matrix_text.config(state=tk.NORMAL)
+        self.matrix_text.delete(1.0, tk.END)
+        self.matrix_text.insert(tk.END, self.format_matrix(self.matrix))
+        self.matrix_text.config(state=tk.DISABLED)
+        self.result_text.delete(1.0, tk.END)
+    
+    def friendship_score(self, arrangement, matrix):
+        return sum(matrix[arrangement[i]][arrangement[i+1]] for i in range(len(arrangement)-1))
+    
+    def analyze_arrangements(self):
+        threshold = self.threshold.get()
+        valid_arrangements = []
+        
+        for perm in itertools.permutations(self.animals):
+            conflict = False
+            for i in range(len(perm)-1):
+                if self.matrix[perm[i]][perm[i+1]] < threshold:
+                    conflict = True
+                    break
+            if not conflict:
+                score = self.friendship_score(perm, self.matrix)
+                valid_arrangements.append((perm, score))
+        
+        valid_arrangements.sort(key=lambda x: x[1], reverse=True)
+        
+        self.result_text.delete(1.0, tk.END)
+        self.result_text.insert(tk.END, f"=== Результаты анализа (порог: {threshold}) ===\n")
+        self.result_text.insert(tk.END, f"Всего допустимых вариантов: {len(valid_arrangements)}\n\n")
+        
+        if valid_arrangements:
+            self.result_text.insert(tk.END, "Топ-10 лучших расстановок по сумме дружбы:\n")
+            for i, (perm, score) in enumerate(valid_arrangements[:10], start=1):
+                self.result_text.insert(tk.END, f"{i}. {perm} - Сумма дружбы: {score}\n")
+            
+            top_perm, top_score = valid_arrangements[0]
+            self.result_text.insert(tk.END, "\n=== ЛУЧШАЯ РАССТАНОВКА ===\n")
+            self.result_text.insert(tk.END, f"{top_perm} - Сумма дружбы: {top_score}\n")
+        else:
+            self.result_text.insert(tk.END, "Нет подходящих расстановок для заданного порога дружбы.\n")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = AnimalFriendship(root)
+    root.mainloop()
