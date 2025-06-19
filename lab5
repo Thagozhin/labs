@@ -1,3 +1,4 @@
+'''В зоопарке К животных. Сформировать все возможные варианты расстановки клеток.'''
 import itertools
 import random
 import timeit
