@@ -1,7 +1,7 @@
+'''F(1) = G(1) = 1; F(n) = (-1)n*(G(n–1)/(2n)!, G(n) = F(n–1) , при n >=2'''
 import timeit
-import matplotlib.pyplot as plt
-import pandas as pd
 import math
+import matplotlib.pyplot as plt
 
 def F_rec(n):
     if n == 1:
@@ -15,36 +15,56 @@ def G_rec(n):
     return F_rec(n - 1)
 
 def F_G_iter(n):
-    F = [0] * (n + 1)
-    G = [0] * (n + 1)
-    F[1] = G[1] = 1
+    # оптимизация: убрали хранение списков, решаем через о(1)
+    if n == 1:
+        return 1, 1
+    f_prev = 1
+    g_prev = 1
     fact = 2
     for i in range(2, n + 1):
         fact *= (2 * i - 1) * (2 * i)
-        G[i] = F[i - 1]
+        g_curr = f_prev
         sign = 1 if i % 2 == 0 else -1
-        F[i] = sign * (G[i - 1] / fact)
-    return F[n], G[n]
+        f_curr = sign * (g_prev / fact)
+        f_prev, g_prev = f_curr, g_curr
+    return f_prev, g_prev
 
-results = []
-for i in range(2, 30):
-    try:
-        t_rec = timeit.timeit(lambda: F_rec(i), number=1)
-    except RecursionError:
-        t_rec = None
-    t_itr = timeit.timeit(lambda: F_G_iter(i), number=1)
-    results.append((i, t_rec, t_itr))
+def format_time(t):
+    s = f"{t:.12f}"
+    whole, dec = s.split('.')
+    return f"{whole}.{dec[:10]}"
 
-df = pd.DataFrame(results, columns=["n", "Recursive Time (s)", "Iterative Time (s)"])
-print(df)
+def main():
+    results = []
+    for i in range(2, 30):
+        try:
+            t_rec = timeit.timeit(lambda: F_rec(i), number=1)
+        except RecursionError:
+            t_rec = None
+        t_itr = timeit.timeit(lambda: F_G_iter(i), number=1)
+        results.append((i, t_rec, t_itr))
 
-plt.figure(figsize=(10, 6))
-plt.plot(df["n"], df["Recursive Time (s)"], label="Рекурсия", marker='o', color='blue')
-plt.plot(df["n"], df["Iterative Time (s)"], label="Итерация", marker='s', color='green')
-plt.xlabel("n")
-plt.ylabel("Время (сек)")
-plt.title("Сравнение времени: рекурсивный vs итеративный подход")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+    print("n | Recursive Time | Iterative Time")
+    for n, t_rec, t_itr in results:
+        rec_str = format_time(t_rec) if t_rec is not None else "None"
+        itr_str = format_time(t_itr)
+        print(f"{n} | {rec_str} | {itr_str}")
+
+    # визуализация результатов
+    ns = [n for n, _, _ in results]
+    rec_times = [t if t is not None else float('nan') for _, t, _ in results]
+    itr_times = [t for _, _, t in results]
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(ns, rec_times, label="Рекурсия", marker='o')
+    plt.plot(ns, itr_times, label="Итерация", marker='s')
+    plt.xlabel("n")
+    plt.ylabel("Время (сек)")
+    plt.title("Сравнение времени: рекурсивный vs итеративный подход")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    main()
