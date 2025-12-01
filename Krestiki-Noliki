@@ -127,9 +127,12 @@ class GameXO:
             return
         self.place(idx, self.side)
         if self.check_win(self.side):
-            self.finish(self.side); return
+            self.highlight_win(self.side)
+            self.finish(self.side)
+            return
         if self.check_draw():
-            self.finish(None); return
+            self.finish(None)
+            return
         ai = 'O' if self.side == 'X' else 'X'
         self.turn = ai
         self.lbl_turn.config(text=f"Ход: {ai}")
@@ -147,9 +150,8 @@ class GameXO:
             if self.cells[i] == '':
                 self.cells[i] = ai
                 if self.check_win(ai):
-                    self.buttons[i].config(text=ai, fg=self.col_o if ai == 'O' else self.col_x)
-                    self.moves[ai] += 1
-                    self.update_moves()
+                    self.place(i, ai)
+                    self.highlight_win(ai)
                     self.finish(ai)
                     return
                 self.cells[i] = ''
@@ -158,10 +160,15 @@ class GameXO:
             if self.cells[i] == '':
                 self.cells[i] = pl
                 if self.check_win(pl):
-                    self.cells[i] = ai
-                    self.buttons[i].config(text=ai, fg=self.col_o if ai == 'O' else self.col_x)
-                    self.moves[ai] += 1
-                    self.update_moves()
+                    self.cells[i] = ''  
+                    self.place(i, ai)
+                    if self.check_win(ai):
+                        self.highlight_win(ai)
+                        self.finish(ai)
+                        return
+                    if self.check_draw():
+                        self.finish(None)
+                        return
                     self.turn = pl
                     self.lbl_turn.config(text=f"Ход: {pl}")
                     return
@@ -170,11 +177,9 @@ class GameXO:
         empty = [i for i, v in enumerate(self.cells) if v == '']
         if empty:
             i = random.choice(empty)
-            self.cells[i] = ai
-            self.buttons[i].config(text=ai, fg=self.col_o if ai == 'O' else self.col_x)
-            self.moves[ai] += 1
-            self.update_moves()
+            self.place(i, ai)
             if self.check_win(ai):
+                self.highlight_win(ai)
                 self.finish(ai)
             elif self.check_draw():
                 self.finish(None)
@@ -195,10 +200,18 @@ class GameXO:
                 [0,4,8],[2,4,6]]
         for c in wins:
             if self.cells[c[0]] == self.cells[c[1]] == self.cells[c[2]] == sym:
-                for i in c:
-                    self.buttons[i].config(bg=self.col_win)
                 return True
         return False
+
+    def highlight_win(self, sym):
+        wins = [[0,1,2],[3,4,5],[6,7,8],
+                [0,3,6],[1,4,7],[2,5,8],
+                [0,4,8],[2,4,6]]
+        for c in wins:
+            if self.cells[c[0]] == self.cells[c[1]] == self.cells[c[2]] == sym:
+                for i in c:
+                    self.buttons[i].config(bg=self.col_win)
+                break
 
     def check_draw(self):
         return '' not in self.cells
