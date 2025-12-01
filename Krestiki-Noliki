@@ -1,0 +1,245 @@
+import tkinter as tk
+from tkinter import messagebox
+import random
+
+class GameXO:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Крестики-нолики")
+        self.root.geometry("700x500")
+        self.root.resizable(False, False)
+        self.root.configure(bg="#f9f9f9")
+
+        self.col_x = "#e53935"
+        self.col_o = "#1e88e5"
+        self.col_bg = "#f9f9f9"
+        self.col_btn = "#ffffff"
+        self.col_win = "#43a047"
+        self.col_muted = "#616161"
+        self.col_border = "#e0e0e0"
+
+        self.cells = [''] * 9
+        self.turn = 'X'
+        self.active = False
+        self.score = {'X': 0, 'O': 0}
+        self.moves = {'X': 0, 'O': 0}
+        self.side = 'X'
+        self.games = 0
+
+        self.buttons = []
+        self.lbl_turn = None
+        self.lbl_moves = None
+        self.lbl_score = None
+        self.lbl_games = None
+
+        self.show_menu()
+
+    def show_menu(self):
+        self.clear()
+        frame = tk.Frame(self.root, bg=self.col_bg, padx=40, pady=40)
+        frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        tk.Label(frame, text="Крестики-нолики", font=("Segoe UI", 28, "bold"),
+                 fg="#212121", bg=self.col_bg).pack(pady=20)
+        tk.Label(frame, text="Выберите сторону:", font=("Segoe UI", 14),
+                 bg=self.col_bg, fg=self.col_muted).pack(pady=10)
+
+        tk.Button(frame, text="Играть за X", font=("Segoe UI", 12, "bold"),
+                  width=20, bg=self.col_x, fg="white", pady=10,
+                  relief="flat", command=lambda: self.start('X')).pack(pady=10)
+        tk.Button(frame, text="Играть за O", font=("Segoe UI", 12, "bold"),
+                  width=20, bg=self.col_o, fg="white", pady=10,
+                  relief="flat", command=lambda: self.start('O')).pack(pady=10)
+        tk.Button(frame, text="Выход", font=("Segoe UI", 12, "bold"),
+                  width=20, bg="black", fg="white", pady=10,
+                  relief="flat", command=self.root.quit).pack(pady=20)
+
+    def start(self, symbol):
+        self.side = symbol
+        self.active = True
+        self.cells = [''] * 9
+        self.moves = {'X': 0, 'O': 0}
+        self.turn = symbol
+        self.clear()
+        self.build_ui()
+
+    def build_ui(self):
+        main = tk.Frame(self.root, bg=self.col_bg)
+        main.pack(fill="both", expand=True, padx=20, pady=20)
+
+        board = tk.Frame(main, bg=self.col_bg, highlightthickness=1,
+                         highlightbackground=self.col_border)
+        board.grid(row=0, column=0, padx=30, pady=20, sticky="n")
+
+        self.buttons = []
+        for i in range(3):
+            board.grid_rowconfigure(i, weight=1, minsize=110)
+            for j in range(3):
+                board.grid_columnconfigure(j, weight=1, minsize=110)
+                btn = tk.Button(board, text="", font=("Segoe UI", 26, "bold"),
+                                bg=self.col_btn, fg="#212121", relief="ridge", bd=2,
+                                command=lambda i=i, j=j: self.move_player(i, j))
+                btn.grid(row=i, column=j, padx=6, pady=6, sticky="nsew")
+                self.buttons.append(btn)
+
+        info = tk.Frame(main, bg=self.col_bg, width=220)
+        info.grid(row=0, column=1, sticky="n", padx=10)
+        info.grid_propagate(False)
+
+        tk.Label(info, text=f"Вы играете за: {self.side}",
+                 font=("Segoe UI", 12, "bold"),
+                 fg=self.col_x if self.side == 'X' else self.col_o,
+                 bg=self.col_bg).pack(pady=10)
+
+        self.lbl_turn = tk.Label(info, text=f"Ход: {self.turn}",
+                                 font=("Segoe UI", 14, "bold"),
+                                 bg=self.col_bg, fg="#212121")
+        self.lbl_turn.pack(pady=15)
+
+        self.lbl_moves = tk.Label(info, text="Ходы:\nX: 0\nO: 0",
+                                  font=("Segoe UI", 12),
+                                  bg=self.col_bg, fg=self.col_muted, justify="left")
+        self.lbl_moves.pack(pady=12)
+
+        self.lbl_score = tk.Label(info, text=f"Счёт:\nX: {self.score['X']} | O: {self.score['O']}",
+                                  font=("Segoe UI", 12), bg=self.col_bg, fg="#f57c00")
+        self.lbl_score.pack(pady=12)
+
+        self.lbl_games = tk.Label(info, text=f"Партий сыграно: {self.games}",
+                                  font=("Segoe UI", 12), bg=self.col_bg, fg=self.col_muted)
+        self.lbl_games.pack(pady=12)
+
+        tk.Button(info, text="Новая игра", font=("Segoe UI", 10, "bold"),
+                  bg="#3498db", fg="white", relief="flat", command=self.reset_round).pack(pady=8)
+        tk.Button(info, text="Меню", font=("Segoe UI", 10, "bold"),
+                  bg="#eeeeee", fg="#212121", relief="flat", command=self.show_menu).pack(pady=6)
+
+        bottom = tk.Frame(self.root, bg=self.col_bg)
+        bottom.pack(side="bottom", pady=10)
+        tk.Button(bottom, text="Сброс", font=("Segoe UI", 12, "bold"),
+                  bg="#e53935", fg="white", relief="flat", command=self.full_reset).pack()
+
+    def move_player(self, row, col):
+        if not self.active or self.turn != self.side:
+            return
+        idx = row * 3 + col
+        if self.cells[idx] != '':
+            return
+        self.place(idx, self.side)
+        if self.check_win(self.side):
+            self.finish(self.side); return
+        if self.check_draw():
+            self.finish(None); return
+        ai = 'O' if self.side == 'X' else 'X'
+        self.turn = ai
+        self.lbl_turn.config(text=f"Ход: {ai}")
+        self.root.after(600, self.ai_move)
+
+    def ai_move(self):
+        if not self.active:
+            return
+        ai = 'O' if self.side == 'X' else 'X'
+        pl = self.side
+        if self.turn != ai:
+            return
+
+        for i in range(9):
+            if self.cells[i] == '':
+                self.cells[i] = ai
+                if self.check_win(ai):
+                    self.buttons[i].config(text=ai, fg=self.col_o if ai == 'O' else self.col_x)
+                    self.moves[ai] += 1
+                    self.update_moves()
+                    self.finish(ai)
+                    return
+                self.cells[i] = ''
+
+        for i in range(9):
+            if self.cells[i] == '':
+                self.cells[i] = pl
+                if self.check_win(pl):
+                    self.cells[i] = ai
+                    self.buttons[i].config(text=ai, fg=self.col_o if ai == 'O' else self.col_x)
+                    self.moves[ai] += 1
+                    self.update_moves()
+                    self.turn = pl
+                    self.lbl_turn.config(text=f"Ход: {pl}")
+                    return
+                self.cells[i] = ''
+
+        empty = [i for i, v in enumerate(self.cells) if v == '']
+        if empty:
+            i = random.choice(empty)
+            self.cells[i] = ai
+            self.buttons[i].config(text=ai, fg=self.col_o if ai == 'O' else self.col_x)
+            self.moves[ai] += 1
+            self.update_moves()
+            if self.check_win(ai):
+                self.finish(ai)
+            elif self.check_draw():
+                self.finish(None)
+            else:
+                self.turn = pl
+                self.lbl_turn.config(text=f"Ход: {pl}")
+
+    def place(self, idx, sym):
+        self.cells[idx] = sym
+        self.buttons[idx].config(text=sym,
+            fg=self.col_x if sym == 'X' else self.col_o, bg=self.col_btn)
+        self.moves[sym] += 1
+        self.update_moves()
+
+    def check_win(self, sym):
+        wins = [[0,1,2],[3,4,5],[6,7,8],
+                [0,3,6],[1,4,7],[2,5,8],
+                [0,4,8],[2,4,6]]
+        for c in wins:
+            if self.cells[c[0]] == self.cells[c[1]] == self.cells[c[2]] == sym:
+                for i in c:
+                    self.buttons[i].config(bg=self.col_win)
+                return True
+        return False
+
+    def check_draw(self):
+        return '' not in self.cells
+
+    def finish(self, winner):
+        self.active = False
+        self.games += 1
+        if winner:
+            self.score[winner] += 1
+            msg = "Вы победили!" if winner == self.side else "Бот победил!"
+            messagebox.showinfo("Игра окончена", msg)
+        else:
+            messagebox.showinfo("Ничья", "Ничья!")
+        self.lbl_score.config(text=f"Счёт:\nX: {self.score['X']} | O: {self.score['O']}")
+        self.lbl_games.config(text=f"Партий сыграно: {self.games}")
+
+    def update_moves(self):
+        self.lbl_moves.config(text=f"Ходы:\nX: {self.moves['X']}\nO: {self.moves['O']}")
+
+    def reset_round(self):
+        self.cells = [''] * 9
+        self.moves = {'X': 0, 'O': 0}
+        self.turn = self.side
+        self.active = True
+        for b in self.buttons:
+            b.config(text="", fg="#212121", bg=self.col_btn)
+        self.lbl_turn.config(text=f"Ход: {self.turn}")
+        self.update_moves()
+
+    def full_reset(self):
+        self.score = {'X': 0, 'O': 0}
+        self.games = 0
+        self.reset_round()
+        self.lbl_score.config(text=f"Счёт:\nX: {self.score['X']} | O: {self.score['O']}")
+        self.lbl_games.config(text=f"Партий сыграно: {self.games}")
+
+    def clear(self):
+        for w in self.root.winfo_children():
+            w.destroy()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = GameXO(root)
+    root.mainloop()
