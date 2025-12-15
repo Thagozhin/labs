@@ -1,0 +1,312 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, colorchooser, simpledialog
+import math
+
+# ---------- Класс треугольника ----------
+class Triangle:
+    def __init__(self, p1=(100, 100), p2=(150, 50), p3=(200, 100), color="lightblue", name="T1"):
+        self.p1 = (float(p1[0]), float(p1[1]))
+        self.p2 = (float(p2[0]), float(p2[1]))
+        self.p3 = (float(p3[0]), float(p3[1]))
+        self.color = color
+        self.name = name
+
+    def vertices(self):
+        return [self.p1, self.p2, self.p3]
+
+    def area(self):
+        (x1, y1), (x2, y2), (x3, y3) = self.vertices()
+        return abs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0)
+
+    def contains_point(self, px, py):
+        A = self.area()
+        def area_pts(a, b, c):
+            (x1, y1), (x2, y2), (x3, y3) = a, b, c
+            return abs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0)
+        t1 = area_pts((px, py), self.p2, self.p3)
+        t2 = area_pts(self.p1, (px, py), self.p3)
+        t3 = area_pts(self.p1, self.p2, (px, py))
+        return abs((t1 + t2 + t3) - A) < 1e-6
+
+    def rotate_around_vertex(self, index, angle_deg):
+        verts = self.vertices()
+        if index not in (0, 1, 2):
+            raise ValueError("Индекс должен быть 0, 1 или 2")
+        cx, cy = verts[index]
+        a = math.radians(angle_deg)
+        new = []
+        for i, (x, y) in enumerate(verts):
+            if i == index:
+                new.append((x, y))
+            else:
+                vx, vy = x - cx, y - cy
+                rx = vx * math.cos(a) - vy * math.sin(a)
+                ry = vx * math.sin(a) + vy * math.cos(a)
+                new.append((cx + rx, cy + ry))
+        self.p1, self.p2, self.p3 = new
+
+
+# ---------- Геометрические вспомогательные функции ----------
+def on_segment(a, b, c):
+    (ax, ay), (bx, by), (cx, cy) = a, b, c
+    return min(ax, bx) - 1e-9 <= cx <= max(ax, bx) + 1e-9 and min(ay, by) - 1e-9 <= cy <= max(ay, by) + 1e-9
+
+def orientation(a, b, c):
+    (ax, ay), (bx, by), (cx, cy) = a, b, c
+    val = (by - ay) * (cx - bx) - (bx - ax) * (cy - by)
+    if abs(val) < 1e-9:
+        return 0
+    return 1 if val > 0 else 2
+
+def segments_intersect(p1, q1, p2, q2):
+    o1 = orientation(p1, q1, p2)
+    o2 = orientation(p1, q1, q2)
+    o3 = orientation(p2, q2, p1)
+    o4 = orientation(p2, q2, q1)
+    if o1 != o2 and o3 != o4:
+        return True
+    if o1 == 0 and on_segment(p1, q1, p2): return True
+    if o2 == 0 and on_segment(p1, q1, q2): return True
+    if o3 == 0 and on_segment(p2, q2, p1): return True
+    if o4 == 0 and on_segment(p2, q2, q1): return True
+    return False
+
+def triangles_intersect(t1, t2):
+    v1 = t1.vertices(); v2 = t2.vertices()
+    edges1 = [(v1[0], v1[1]), (v1[1], v1[2]), (v1[2], v1[0])]
+    edges2 = [(v2[0], v2[1]), (v2[1], v2[2]), (v2[2], v2[0])]
+    for e1 in edges1:
+        for e2 in edges2:
+            if segments_intersect(e1[0], e1[1], e2[0], e2[1]):
+                return True
+    if t1.contains_point(*v2[0]) or t1.contains_point(*v2[1]) or t1.contains_point(*v2[2]):
+        return True
+    if t2.contains_point(*v1[0]) or t2.contains_point(*v1[1]) or t2.contains_point(*v1[2]):
+        return True
+    return False
+
+
+# ---------- Приложение ----------
+class App:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Редактор треугольников")
+        self.triangles = []
+        self._next_T = 1
+        self._intersecting = set()
+        self._build_ui()
+        self._add_examples()
+
+    def _build_ui(self):
+        top = ttk.Frame(self.root); top.pack(fill=tk.X, padx=8, pady=8)
+        btns = [
+            ("Добавить", self.add_triangle),
+            ("Копировать", self.copy_triangle),
+            ("Удалить", self.delete_triangle),
+            ("Повернуть", self.rotate_dialog),
+            ("Раскрасить", self.change_color),
+            ("Проверить пересечение", self.check_intersection),
+        ]
+        for txt, cmd in btns:
+            ttk.Button(top, text=txt, command=cmd).pack(side=tk.LEFT, padx=4)
+
+        left = ttk.Frame(self.root); left.pack(side=tk.LEFT, fill=tk.Y, padx=8, pady=8)
+        ttk.Label(left, text="Центр X:").grid(row=0, column=0, sticky=tk.W)
+        self.cx_var = tk.StringVar(value="200"); ttk.Entry(left, textvariable=self.cx_var, width=12).grid(row=0, column=1)
+        ttk.Label(left, text="Центр Y:").grid(row=1, column=0, sticky=tk.W)
+        self.cy_var = tk.StringVar(value="200"); ttk.Entry(left, textvariable=self.cy_var, width=12).grid(row=1, column=1)
+        ttk.Label(left, text="Размер:").grid(row=2, column=0, sticky=tk.W)
+        self.size_var = tk.StringVar(value="60"); ttk.Entry(left, textvariable=self.size_var, width=12).grid(row=2, column=1)
+        ttk.Label(left, text="Имя:").grid(row=3, column=0, sticky=tk.W)
+        self.name_var = tk.StringVar(value=""); ttk.Entry(left, textvariable=self.name_var, width=12).grid(row=3, column=1)
+        ttk.Button(left, text="Применить", command=self.apply_from_fields).grid(row=4, column=0, columnspan=2, pady=8)
+
+        list_frame = ttk.Frame(self.root); list_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0,8), pady=8)
+        ttk.Label(list_frame, text="Треугольники").pack(anchor=tk.W)
+        self.listbox = tk.Listbox(list_frame, width=32, selectmode=tk.EXTENDED, exportselection=False)
+        self.listbox.pack(fill=tk.Y, expand=True)
+        self.listbox.bind("<<ListboxSelect>>", self.on_select)
+
+        canvas_frame = ttk.Frame(self.root); canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=8, pady=8)
+        self.canvas = tk.Canvas(canvas_frame, bg="white"); self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.canvas.bind("<Button-1>", self.on_canvas_click)
+
+    def _add_examples(self):
+        self.triangles.append(Triangle((220, 220), (260, 180), (300, 220), color="lightgreen", name=self._next_name()))
+        self.triangles.append(Triangle((420, 240), (460, 200), (500, 240), color="pink", name=self._next_name()))
+        self._refresh_list(preserve_selection=False); self._draw()
+
+    def _next_name(self):
+        name = f"T{self._next_T}"; self._next_T += 1; return name
+
+    def add_triangle(self):
+        try:
+            cx = float(self.cx_var.get()); cy = float(self.cy_var.get())
+            size = float(self.size_var.get())
+        except ValueError:
+            messagebox.showerror("Ошибка", "Центр и размер должны быть числами"); return
+        name = self.name_var.get().strip() or self._next_name()
+        base = [90.0, 210.0, 330.0]
+        verts = []
+        for a in base:
+            rad = math.radians(a)
+            verts.append((cx + size * math.cos(rad), cy + size * math.sin(rad)))
+        tri = Triangle(verts[0], verts[1], verts[2], color="lightblue", name=name)
+        if tri.area() <= 0:
+            messagebox.showerror("Ошибка", "Треугольник вырожден"); return
+        self.triangles.append(tri); self._refresh_list(preserve_selection=False); self._draw()
+
+    def copy_triangle(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showwarning("Предупреждение", "Выберите треугольник для копирования"); return
+        t = self.triangles[sel[0]]
+        self.triangles.append(Triangle(t.p1, t.p2, t.p3, color=t.color, name=self._next_name()))
+        self._refresh_list(preserve_selection=False); self._draw()
+
+    def delete_triangle(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showwarning("Предупреждение", "Выберите треугольник для удаления"); return
+        for i in sorted(sel, reverse=True): del self.triangles[i]
+        self._intersecting.clear(); self._refresh_list(preserve_selection=False); self._draw()
+
+    def rotate_dialog(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showwarning("Предупреждение", "Выберите треугольник для поворота"); return
+        idx = sel[0]
+        angle = simpledialog.askfloat("Поворот", "Угол в градусах (положительный — по часовой):", parent=self.root)
+        if angle is None: return
+        vertex = simpledialog.askinteger("Индекс вершины", "Индекс вершины (0,1,2):", parent=self.root, minvalue=0, maxvalue=2)
+        if vertex is None: return
+        try:
+            self.triangles[idx].rotate_around_vertex(vertex, angle)
+        except Exception as e:
+            messagebox.showerror("Ошибка", str(e)); return
+        # при повороте не должно оставаться старой обводки — обновляем холст
+        self._refresh_list(preserve_selection=True); self._draw()
+
+    def change_color(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showwarning("Предупреждение", "Выберите треугольник для раскраски"); return
+        idx = sel[0]
+        color = colorchooser.askcolor(title="Выберите цвет", parent=self.root)[1]
+        if color:
+            self.triangles[idx].color = color
+            self._refresh_list(preserve_selection=True); self._draw()
+
+    def check_intersection(self):
+        sel = list(self.listbox.curselection())
+        if len(sel) < 2:
+            messagebox.showinfo("Информация", "Выберите два или более треугольников (Ctrl+клик или Shift+клик) для проверки"); return
+        pairs = []; inter = set()
+        for i in range(len(sel)):
+            for j in range(i + 1, len(sel)):
+                a, b = sel[i], sel[j]
+                if triangles_intersect(self.triangles[a], self.triangles[b]):
+                    pairs.append((a, b)); inter.add(a); inter.add(b)
+        self._intersecting = inter
+        self._refresh_list(preserve_selection=True); self._draw()
+        if pairs:
+            msg = "\n".join(f"'{self.triangles[a].name}' ↔ '{self.triangles[b].name}'" for a, b in pairs)
+            messagebox.showinfo("Результат", "Найдены пересечения:\n" + msg)
+        else:
+            messagebox.showinfo("Результат", "Пересечений среди выбранных треугольников не найдено")
+
+    def apply_from_fields(self):
+        sel = self.listbox.curselection()
+        if not sel:
+            messagebox.showwarning("Предупреждение", "Выберите треугольник для применения изменений"); return
+        idx = sel[0]
+        try:
+            cx = float(self.cx_var.get()); cy = float(self.cy_var.get()); size = float(self.size_var.get())
+        except ValueError:
+            messagebox.showerror("Ошибка", "Центр и размер должны быть числами"); return
+        name = self.name_var.get().strip() or self.triangles[idx].name
+        base = [90.0, 210.0, 330.0]; verts = []
+        for a in base:
+            rad = math.radians(a)
+            verts.append((cx + size * math.cos(rad), cy + size * math.sin(rad)))
+        self.triangles[idx].p1, self.triangles[idx].p2, self.triangles[idx].p3 = verts
+        self.triangles[idx].name = name
+        # при изменении параметров старые обводки должны исчезнуть — обновляем холст
+        self._refresh_list(preserve_selection=True); self._draw()
+
+    def on_select(self, event):
+        sel = self.listbox.curselection()
+        if sel:
+            idx = sel[0]; t = self.triangles[idx]
+            x1, y1 = t.p1; x2, y2 = t.p2; x3, y3 = t.p3
+            cx = (x1 + x2 + x3) / 3.0; cy = (y1 + y2 + y3) / 3.0
+            size = (math.hypot(x1 - cx, y1 - cy) + math.hypot(x2 - cx, y2 - cy) + math.hypot(x3 - cx, y3 - cy)) / 3.0
+            self.cx_var.set(f"{cx:.2f}"); self.cy_var.set(f"{cy:.2f}")
+            self.size_var.set(f"{size:.2f}"); self.name_var.set(t.name)
+        # при смене выделения удаляем старые обводки и рисуем новые
+        self._draw()
+
+    def on_canvas_click(self, event):
+        x, y = event.x, event.y
+        for i, t in enumerate(self.triangles):
+            for vx, vy in t.vertices():
+                if (vx - x) ** 2 + (vy - y) ** 2 <= 9:
+                    ctrl = (event.state & 0x0004) != 0
+                    if ctrl:
+                        cur = list(self.listbox.curselection())
+                        if i in cur:
+                            self.listbox.selection_clear(i)
+                        else:
+                            self.listbox.selection_set(i)
+                    else:
+                        self.listbox.selection_clear(0, tk.END); self.listbox.selection_set(i); self.listbox.see(i)
+                    # при клике обновляем холст — старые обводки исчезнут
+                    self.on_select(None); return
+
+    def _refresh_list(self, preserve_selection=True):
+        current = list(self.listbox.curselection()) if preserve_selection else []
+        self.listbox.delete(0, tk.END)
+        for t in self.triangles:
+            self.listbox.insert(tk.END, f"{t.name}  цвет:{t.color}")
+        if preserve_selection and current:
+            for idx in current:
+                if 0 <= idx < self.listbox.size(): self.listbox.selection_set(idx)
+
+    def _draw(self):
+        # Полностью очищаем холст перед перерисовкой
+        self.canvas.delete("all")
+
+        # Рисуем все треугольники (основная заливка)
+        for t in self.triangles:
+            pts = []
+            for x, y in t.vertices(): pts.extend([x, y])
+            try:
+                self.canvas.create_polygon(pts, fill=t.color, outline="black", width=2, tags=("tri",))
+            except Exception:
+                pass
+            for x, y in t.vertices():
+                r = 4
+                self.canvas.create_oval(x - r, y - r, x + r, y + r, fill="black", tags=("vert",))
+
+        # Подсветка пересекающихся треугольников (красная толстая рамка)
+        # Сначала удаляем старые рамки (canvas.delete("inter")) — но мы уже очистили холст выше
+        for i in sorted(self._intersecting):
+            if 0 <= i < len(self.triangles):
+                pts = []
+                for x, y in self.triangles[i].vertices(): pts.extend([x, y])
+                self.canvas.create_polygon(pts, outline="red", width=3, fill="", tags=("inter",))
+
+        # Подсветка выделенных (синяя рамка)
+        # Перед рисованием синей рамки мы гарантированно очистили холст, поэтому старые синие рамки исчезают
+        for i in self.listbox.curselection():
+            if 0 <= i < len(self.triangles):
+                pts = []
+                for x, y in self.triangles[i].vertices(): pts.extend([x, y])
+                self.canvas.create_polygon(pts, outline="blue", width=2, fill="", tags=("sel",))
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = App(root)
+    root.geometry("1000x640")
+    root.mainloop()
