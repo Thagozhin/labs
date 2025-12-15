@@ -22,7 +22,7 @@ class MazeGame:
         btn_frame.pack(pady=(0, 6))
         ttk.Button(btn_frame, text="Новая игра", command=self.reset_game,
                    style="Accent.TButton").pack(side=tk.LEFT, padx=6)
-        ttk.Button(btn_frame, text="Играть", command=self.start_dfs,
+        ttk.Button(btn_frame, text="Играть", command=self.start_search,
                    style="Accent.TButton").pack(side=tk.LEFT, padx=6)
 
         self.timer_label = tk.Label(root, text="Время: -- с",
@@ -68,7 +68,7 @@ class MazeGame:
     def generate_maze(self):
         self.maze = [[True] * self.cols for _ in range(self.rows)]
 
-        def dfs(x, y):
+        def carve(x, y):
             self.maze[y][x] = False
             dirs = [(0, -2), (0, 2), (-2, 0), (2, 0)]
             random.shuffle(dirs)
@@ -76,9 +76,9 @@ class MazeGame:
                 nx, ny = x + dx, y + dy
                 if 0 < nx < self.cols - 1 and 0 < ny < self.rows - 1 and self.maze[ny][nx]:
                     self.maze[y + dy // 2][x + dx // 2] = False
-                    dfs(nx, ny)
+                    carve(nx, ny)
 
-        dfs(1, 1)
+        carve(1, 1)
 
         passages = [(x, y)
                     for y in range(1, self.rows - 1)
@@ -92,7 +92,6 @@ class MazeGame:
             if start_candidates:
                 self.player_pos = random.choice(start_candidates)
             else:
-                # если мало свободных клеток, выберем любую, не равную первому выходу
                 fallback = [p for p in passages if p != self.exit_positions[0]]
                 self.player_pos = random.choice(fallback) if fallback else passages[0]
         else:
@@ -137,26 +136,28 @@ class MazeGame:
             self.root.after(1000, self.tick_timer)
 
     def end_game(self, win):
+
         self.game_over = True
         self.moving = False
         msg = "Вы сбежали!" if win else "Вы потерялись..."
         messagebox.showinfo("Победа!" if win else "Проигрыш", msg)
 
-    def start_dfs(self):
+    def start_search(self):
         if self.moving or self.game_over:
             return
         self.moving = True
         self.tick_timer()
-        self.stack = [self.player_pos]
-        self.visited = {self.player_pos}
-        self.dfs_step()
+        self.path_stack = [self.player_pos]
+        self.seen = {self.player_pos}
+        self.advance_search()
 
-    def dfs_step(self):
+    def advance_search(self):
         if self.game_over or not self.moving:
             return
-        if not self.stack:
+        if not self.path_stack:
             return
-        current = self.stack[-1]
+
+        current = self.path_stack[-1]
         self.player_pos = current
         self.draw_player()
 
@@ -173,17 +174,17 @@ class MazeGame:
         for dx, dy in [(0, -1), (1, 0), (0, 1), (-1, 0)]:
             nx, ny = x + dx, y + dy
             if 0 <= nx < self.cols and 0 <= ny < self.rows:
-                if not self.maze[ny][nx] and (nx, ny) not in self.visited:
+                if not self.maze[ny][nx] and (nx, ny) not in self.seen:
                     neighbors.append((nx, ny))
 
         if neighbors:
-            nxt = random.choice(neighbors)
-            self.visited.add(nxt)
-            self.stack.append(nxt)
+            next_cell = random.choice(neighbors)
+            self.seen.add(next_cell)
+            self.path_stack.append(next_cell)
         else:
-            self.stack.pop()
+            self.path_stack.pop()
 
-        self.root.after(200, self.dfs_step)
+        self.root.after(200, self.advance_search)
 
 
 if __name__ == "__main__":
