@@ -1,0 +1,143 @@
+import tkinter as tk
+import random
+
+SIZE = 10
+
+def place_ships():
+    board, ships = set(), []
+    for size in [4,3,3,2,2,2,1,1,1,1]:
+        for _ in range(200):
+            h = random.choice([True, False])
+            x = random.randint(0, SIZE - (size if h else 1))
+            y = random.randint(0, SIZE - (size if not h else 1))
+            cells = {(x + (i if h else 0), y + (i if not h else 0)) for i in range(size)}
+            if all((cx+dx, cy+dy) not in board for cx,cy in cells for dx in (-1,0,1) for dy in (-1,0,1)):
+                ships.append(cells); board |= cells; break
+        else:
+            ships.append(cells); board |= cells
+    return ships
+
+class Board:
+    def __init__(self):
+        self.ships = place_ships()
+        self.shots = set()
+    def shoot(self, pos):
+        if pos in self.shots: return None
+        self.shots.add(pos)
+        for s in self.ships:
+            if pos in s: return "sunk" if s <= self.shots else "hit"
+        return "miss"
+    def all_sunk(self): return all(s <= self.shots for s in self.ships)
+
+class AI:
+    def __init__(self):
+        self.board = Board(); self.targets = []; self.used = set()
+    def shoot(self):
+        if self.targets: return self.targets.pop()
+        choices = [(x,y) for x in range(SIZE) for y in range(SIZE) if (x,y) not in self.used]
+        return random.choice(choices) if choices else (0,0)
+    def feedback(self, pos, res):
+        self.used.add(pos)
+        if res == "hit":
+            x,y = pos
+            for dx,dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                nx,ny = x+dx, y+dy
+                if 0<=nx<SIZE and 0<=ny<SIZE and (nx,ny) not in self.used:
+                    self.targets.append((nx,ny))
+        elif res == "sunk":
+            self.targets.clear()
+
+class Game:
+    def __init__(self, root):
+        self.root = root; self.root.title("Морской бой")
+        self.scores = {"player":0,"ai":0}
+        self._build_ui(); self.start_round()
+
+    def _build_ui(self):
+        f = tk.Frame(self.root); f.pack(padx=8,pady=8)
+        top = tk.Frame(f); top.pack(fill="x")
+        self.status = tk.Label(top, text="Готово. Ваш ход.", font=("Arial",12)); self.status.pack(side="left")
+        self.score_label = tk.Label(top, text="Счёт — Вы: 0  Компьютер: 0", font=("Arial",11)); self.score_label.pack(side="right")
+        boards = tk.Frame(f); boards.pack(pady=6)
+        left = tk.Frame(boards); left.grid(row=0,column=0,padx=(0,20)); tk.Label(left,text="Мой флот").pack(); self.p_frame = tk.Frame(left); self.p_frame.pack()
+        right = tk.Frame(boards); right.grid(row=0,column=1,padx=(20,0)); tk.Label(right,text="Флот противника").pack(); self.e_frame = tk.Frame(right); self.e_frame.pack()
+        tk.Button(f, text="Новая игра", command=self.reset_match).pack(pady=(6,0))
+        self.p_btns, self.e_btns = [], []
+
+        def make_handler(xx,yy):
+            def h(): self.player_shot(xx,yy)
+            return h
+
+        for y in range(SIZE):
+            rp,re = [],[]
+            for x in range(SIZE):
+                bp = tk.Button(self.p_frame, width=2, height=1, bg="lightgray", state="disabled")
+                bp.grid(row=y,column=x,padx=1,pady=1); rp.append(bp)
+                be = tk.Button(self.e_frame, width=2, height=1, bg="lightgray", command=make_handler(x,y))
+                be.grid(row=y,column=x,padx=1,pady=1); re.append(be)
+            self.p_btns.append(rp); self.e_btns.append(re)
+
+    def start_round(self):
+        self.player, self.ai = Board(), AI()
+        self.round_active, self.turn = True, "player"
+        self.status.config(text="Раунд начат — ваш ход")
+        for y in range(SIZE):
+            for x in range(SIZE):
+                self.p_btns[y][x].config(bg="lightgray")
+                self.e_btns[y][x].config(bg="lightgray", state="normal")
+        self.update_own()
+
+    def player_shot(self, x, y):
+        if not self.round_active or self.turn!="player": return
+        res = self.ai.board.shoot((x,y))
+        if res is None: return
+        if res in ("hit","sunk"):
+            self.e_btns[y][x].config(bg="red", state="disabled"); self.status.config(text="Попадание! Ваш ход продолжается")
+        else:
+            self.e_btns[y][x].config(bg="darkgray", state="disabled"); self.status.config(text="Мимо. Ход компьютера"); self.turn="ai"
+        if self.ai.board.all_sunk():
+            self.scores["player"]+=1; self.end_round("player"); return
+        if self.turn=="ai": self.root.after(250, self.ai_move)
+
+    def ai_move(self):
+        if not self.round_active: return
+        pos = self.ai.shoot(); x,y = pos
+        res = self.player.shoot(pos)
+        if res is None: self.root.after(50,self.ai_move); return
+        ai_res = "hit" if res in ("hit","sunk") else "miss"
+        self.ai.feedback(pos, ai_res)
+        if ai_res=="hit":
+            self.p_btns[y][x].config(bg="red"); self.status.config(text=f"Компьютер попал в {pos}. Компьютер ходит снова")
+            if self.player.all_sunk(): self.scores["ai"]+=1; self.end_round("ai"); return
+            self.update_own(); self.root.after(250,self.ai_move); return
+        self.p_btns[y][x].config(bg="darkgray"); self.status.config(text="Компьютер промахнулся. Ваш ход"); self.turn="player"
+        if self.player.all_sunk(): self.scores["ai"]+=1; self.end_round("ai")
+        self.update_own()
+
+    def end_round(self, winner):
+        self.round_active = False; self.update_score()
+        self.status.config(text=("Вы выиграли раунд!" if winner=="player" else "Компьютер выиграл раунд!"))
+        for s in self.ai.board.ships:
+            for (x,y) in s:
+                if (x,y) not in self.ai.board.shots: self.e_btns[y][x].config(bg="lightgreen")
+        self.root.after(1000, self.start_round)
+
+    def update_score(self):
+        self.score_label.config(text=f"Счёт — Вы: {self.scores['player']}  Компьютер: {self.scores['ai']}")
+
+    def update_own(self):
+        for y in range(SIZE):
+            for x in range(SIZE):
+                pos=(x,y)
+                if pos in self.player.shots:
+                    self.p_btns[y][x].config(bg="red" if any(pos in s for s in self.player.ships) else "darkgray")
+                elif any(pos in s for s in self.player.ships):
+                    self.p_btns[y][x].config(bg="lightgreen")
+                else:
+                    self.p_btns[y][x].config(bg="lightgray")
+
+    def reset_match(self):
+        self.scores={"player":0,"ai":0}; self.update_score(); self.start_round()
+
+if __name__ == "__main__":
+    root = tk.Tk(); Game(root); root.mainloop()
